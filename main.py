@@ -6,6 +6,7 @@ from time import sleep
 import os
 import sys
 from colorama import Fore, Back, Style
+from prettytable import PrettyTable
 # Set to your game directory (where LeagueClient.exe is)
 gamedirs = [r'M:\Gry\Riot Games\League of Legends',
             r'M:\Gry\Riot Games\League of Legends']
@@ -105,9 +106,9 @@ while True:
 # Get available champions
 #
 championsNames = {}
-champions = []
-championsOwnedWithoutChest = []
-while not champions or len(champions) < 1:
+champions = {}
+result=[]
+while not result or len(result) < 1:
     sleep(1)
 
     r = request('get', '/lol-champ-select/v1/all-grid-champions')
@@ -115,23 +116,17 @@ while not champions or len(champions) < 1:
     if r.status_code != 200:
         continue
 
-    champions = r.json()
+    result = r.json()
 
-for champion in champions:
+for champion in result:
     championsNames[champion['id']]=champion['name']
-    if champion['disabled']:
-        continue
-    if not champion['owned']:
-        continue
-    if champion['masteryChestGranted']:
-        continue
-    championsOwnedWithoutChest.append(champion['id'])
+    champions[champion['id']]=champion
 
 ###
 # Main loop
 #
 
-championsInLobby = {}
+championsInLobby = []
 while True:
 
     r = request('get', '/lol-gameflow/v1/gameflow-phase')
@@ -149,7 +144,7 @@ while True:
     if phase == 'ReadyCheck' and autoAccept:
         r = request('post', '/lol-matchmaking/v1/ready-check/accept')  # '/lol-lobby-team-builder/v1/ready-check/accept')
         print(Back.BLACK + Fore.GREEN + "Game accepted" + Style.RESET_ALL)
-        championsInLobby = {}
+        championsInLobby = []
     #check champions in 
     elif phase == 'ChampSelect':
         r = request('get', '/lol-champ-select/v1/session')
@@ -160,30 +155,31 @@ while True:
                 print(Back.BLACK + Fore.RED + str(r.status_code) + Style.RESET_ALL, r.text)
             continue
         sesja = r.json()
-        #check champions on bench
+        #champions on bench
         for benchChampion in sesja['benchChampionIds']:
             if benchChampion in championsInLobby:
                 continue
-            if benchChampion in championsOwnedWithoutChest:
-                championsInLobby[benchChampion]=True
-            else:
-                championsInLobby[benchChampion]=False
-        #check other player champion
+            championsInLobby.append(benchChampion)
+        #other player champions
         for player in sesja['myTeam']:
             playerChampion = player['championId']
             if playerChampion in championsInLobby:
                 continue
-            if playerChampion in championsOwnedWithoutChest:
-                championsInLobby[playerChampion]=True
-            else:
-                championsInLobby[playerChampion]=False
+            championsInLobby.append(playerChampion)
         #listChampions
-        print(Fore.LIGHTMAGENTA_EX + "Champions in lobby" + Style.RESET_ALL)
+        tabelka = PrettyTable()
+        tabelka.field_names = [Fore.LIGHTMAGENTA_EX+"Champions in lobby"+ Style.RESET_ALL,Fore.CYAN + "Maestry Level"+ Style.RESET_ALL, Fore.LIGHTBLUE_EX + "Maestry Points" + Style.RESET_ALL]
+        # print(Fore.LIGHTMAGENTA_EX + "Champions in lobby" + Style.RESET_ALL + Fore.CYAN + "\t" + Style.RESET_ALL + Fore.LIGHTBLUE_EX + "\tMaestry Points" + Style.RESET_ALL)
         for champion in championsInLobby:
-            if championsInLobby[champion]:
-                print(Fore.GREEN + championsNames[champion] + Style.RESET_ALL)
+            if not(champions[champion]['masteryChestGranted']) and champions[champion]['owned']:
+                # print(Fore.GREEN + champions[champion]["name"] + Style.RESET_ALL + Fore.CYAN +"\t\t\t"+str(champions[champion]["masteryLevel"]) + Style.RESET_ALL + Fore.LIGHTBLUE_EX +"\t"+ str(champions[champion]["masteryPoints"]) + Style.RESET_ALL)
+                tabelka.add_row([Fore.GREEN + champions[champion]["name"] + Style.RESET_ALL, Fore.CYAN + str(champions[champion]["masteryLevel"]) + Style.RESET_ALL, Fore.LIGHTBLUE_EX + str(champions[champion]["masteryPoints"]) + Style.RESET_ALL])
+            elif champions[champion]['masteryChestGranted']:
+                # print(Fore.YELLOW + champions[champion]["name"] + Style.RESET_ALL + Fore.CYAN +"\t\t\t"+ str(champions[champion]["masteryLevel"]) + Style.RESET_ALL + Fore.LIGHTBLUE_EX +"\t"+ str(champions[champion]["masteryPoints"]) + Style.RESET_ALL)
+                tabelka.add_row([Fore.YELLOW + champions[champion]["name"] + Style.RESET_ALL, Fore.CYAN + str(champions[champion]["masteryLevel"]) + Style.RESET_ALL, Fore.LIGHTBLUE_EX + str(champions[champion]["masteryPoints"]) + Style.RESET_ALL])
             else:
-                print(Fore.RED + championsNames[champion] + Style.RESET_ALL)
+                tabelka.add_row([Fore.RED + champions[champion]["name"] + Style.RESET_ALL,"Brak","Brak"])
+        print(tabelka)
     else:
         print(Back.BLACK + Fore.YELLOW + "Waiting for champ select" + Style.RESET_ALL)
     sleep(0.3)    
