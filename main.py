@@ -1,8 +1,11 @@
+from datetime import timedelta
 import requests
 import urllib3
 import json
 from base64 import b64encode
 from time import sleep
+import time
+import datetime
 import os
 import sys
 from colorama import Fore, Back, Style
@@ -34,6 +37,9 @@ def request(method, path, query='', data=''):
         r = fn(url, verify=False, headers=headers, json=data)
 
     return r
+
+def strdelta(tdelta):
+    pass
 
 ###
 # Read the lock file to retrieve LCU API credentials
@@ -106,7 +112,9 @@ while True:
 # Get available champions
 #
 championsNames = {}
+# 1: "Annie"
 champions = {}
+# 1: "id", "owned", "masteryLevel", "masteryPoints", "masteryChestGranted" ect.
 result=[]
 while not result or len(result) < 1:
     sleep(1)
@@ -125,7 +133,9 @@ for champion in result:
 ###
 # Main loop
 #
-
+chestCount = 0 #how many chest can 
+chestTime = 0 #time in epoch when next chest would be available
+chestChecked = False
 championsInLobby = []
 while True:
 
@@ -140,6 +150,18 @@ while True:
 
     phase = r.json()
 
+    if not(chestChecked):
+        #ernable chests
+        result = request('get', '/lol-collections/v1/inventories/chest-eligibility')
+        if result.status_code != 200:
+            if debug:
+                print(Back.BLACK + Fore.RED + str(result.status_code) + Style.RESET_ALL, result.text)
+            continue
+        result = result.json()
+        chestCount = result["earnableChests"]
+        chestTime = datetime.datetime.fromtimestamp(result["nextChestRechargeTime"]/1000)
+        chestChecked = True
+
     # Auto accept match
     if phase == 'ReadyCheck' and autoAccept:
         r = request('post', '/lol-matchmaking/v1/ready-check/accept')  # '/lol-lobby-team-builder/v1/ready-check/accept')
@@ -147,41 +169,54 @@ while True:
         championsInLobby = []
     #check champions in 
     elif phase == 'ChampSelect':
-        r = request('get', '/lol-champ-select/v1/session')
+        result = request('get', '/lol-champ-select/v1/session')
         if debug:
             print(r.status_code)
-        if r.status_code != 200:
+        if result.status_code != 200:
             if debug:
                 print(Back.BLACK + Fore.RED + str(r.status_code) + Style.RESET_ALL, r.text)
             continue
-        sesja = r.json()
+        result = result.json()
         #champions on bench
-        for benchChampion in sesja['benchChampionIds']:
+        for benchChampion in result['benchChampionIds']:
             if benchChampion in championsInLobby:
                 continue
             championsInLobby.append(benchChampion)
         #other player champions
-        for player in sesja['myTeam']:
+        for player in result['myTeam']:
             playerChampion = player['championId']
             if playerChampion in championsInLobby:
                 continue
             championsInLobby.append(playerChampion)
         #listChampions
-        tabelka = PrettyTable()
-        tabelka.field_names = [Fore.LIGHTMAGENTA_EX+"Champions in lobby"+ Style.RESET_ALL,Fore.CYAN + "Maestry Level"+ Style.RESET_ALL, Fore.LIGHTBLUE_EX + "Maestry Points" + Style.RESET_ALL]
-        # print(Fore.LIGHTMAGENTA_EX + "Champions in lobby" + Style.RESET_ALL + Fore.CYAN + "\t" + Style.RESET_ALL + Fore.LIGHTBLUE_EX + "\tMaestry Points" + Style.RESET_ALL)
+        table = PrettyTable()
+        table.field_names = [Fore.LIGHTMAGENTA_EX+ "Champions in lobby" + Style.RESET_ALL,Fore.CYAN + "Maestry Level"+ Style.RESET_ALL, Fore.LIGHTBLUE_EX + "Maestry Points" + Style.RESET_ALL]
         for champion in championsInLobby:
             if not(champions[champion]['masteryChestGranted']) and champions[champion]['owned']:
-                # print(Fore.GREEN + champions[champion]["name"] + Style.RESET_ALL + Fore.CYAN +"\t\t\t"+str(champions[champion]["masteryLevel"]) + Style.RESET_ALL + Fore.LIGHTBLUE_EX +"\t"+ str(champions[champion]["masteryPoints"]) + Style.RESET_ALL)
-                tabelka.add_row([Fore.GREEN + champions[champion]["name"] + Style.RESET_ALL, Fore.CYAN + str(champions[champion]["masteryLevel"]) + Style.RESET_ALL, Fore.LIGHTBLUE_EX + str(champions[champion]["masteryPoints"]) + Style.RESET_ALL])
+                table.add_row([Fore.GREEN + champions[champion]["name"] + Style.RESET_ALL, Fore.CYAN + str(champions[champion]["masteryLevel"]) + Style.RESET_ALL, Fore.LIGHTBLUE_EX + str(champions[champion]["masteryPoints"]) + Style.RESET_ALL])
             elif champions[champion]['masteryChestGranted']:
-                # print(Fore.YELLOW + champions[champion]["name"] + Style.RESET_ALL + Fore.CYAN +"\t\t\t"+ str(champions[champion]["masteryLevel"]) + Style.RESET_ALL + Fore.LIGHTBLUE_EX +"\t"+ str(champions[champion]["masteryPoints"]) + Style.RESET_ALL)
-                tabelka.add_row([Fore.YELLOW + champions[champion]["name"] + Style.RESET_ALL, Fore.CYAN + str(champions[champion]["masteryLevel"]) + Style.RESET_ALL, Fore.LIGHTBLUE_EX + str(champions[champion]["masteryPoints"]) + Style.RESET_ALL])
+                table.add_row([Fore.YELLOW + champions[champion]["name"] + Style.RESET_ALL, Fore.CYAN + str(champions[champion]["masteryLevel"]) + Style.RESET_ALL, Fore.LIGHTBLUE_EX + str(champions[champion]["masteryPoints"]) + Style.RESET_ALL])
             else:
-                tabelka.add_row([Fore.RED + champions[champion]["name"] + Style.RESET_ALL,"Brak","Brak"])
-        print(tabelka)
+                table.add_row([Fore.RED + champions[champion]["name"] + Style.RESET_ALL,"None","None"])
+        #timecalc
+        now = datetime.datetime.now()
+        timeToNextChest = chestTime - now
+        #print
+        if chestCount > 0:
+            print(Fore.CYAN + "Eranable chests: " + chestCount + Style.RESET_ALL, end="\t") 
+        else:
+            print(Fore.YELLOW + "You don't have chests to earn -_-", end="\t")
+        print(Fore.LIGHTBLUE_EX + "Time to next chest:" + str(timeToNextChest) + Style.RESET_ALL)
+        print(table)
+        print(Fore.GREEN + "Champion owned and chest NOT earned" + Style.RESET_ALL)
+        print(Fore.YELLOW + "Champion owned and chest earned" + Style.RESET_ALL)
+        print(Fore.RED + "Champion not owned" + Style.RESET_ALL)
+    elif phase == "EndOfGame":
+        chestChecked = False
+        print(Back.BLACK + Fore.YELLOW + "Waiting for champ select" + Style.RESET_ALL)
     else:
         print(Back.BLACK + Fore.YELLOW + "Waiting for champ select" + Style.RESET_ALL)
     sleep(0.3)    
-    os.system("cls")
+    if not(debug):
+        os.system("cls")
     
