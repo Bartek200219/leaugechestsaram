@@ -203,7 +203,7 @@ while True:
         timeToNextChest = chestTime - now
         #print
         if chestCount > 0:
-            print(Fore.CYAN + "Eranable chests: " + chestCount + Style.RESET_ALL, end="\t") 
+            print(Fore.CYAN + "Eranable chests: " + str(chestCount) + Style.RESET_ALL, end="\t") 
         else:
             print(Fore.YELLOW + "You don't have chests to earn -_-", end="\t")
         print(Fore.LIGHTBLUE_EX + "Time to next chest:" + str(timeToNextChest) + Style.RESET_ALL)
