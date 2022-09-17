@@ -11,3 +11,9 @@ This program will help you earn chests while playing Arams!
 - Show how many chest you can earn and time to next chest
 
 
+
+### Inspiration:
+
+- [Asbra](https://github.com/Asbra) - [League of Legends auto-accept matchmaking, auto-pick champion](https://gist.github.com/Asbra/484165c4dd171e58275a1a0fb83e6978) 
+
+
