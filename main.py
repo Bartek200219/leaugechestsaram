@@ -178,10 +178,10 @@ while True:
             continue
         result = result.json()
         #champions on bench
-        for benchChampion in result['benchChampionIds']:
-            if benchChampion in championsInLobby:
+        for benchChampion in result['benchChampions']:
+            if benchChampion['championId'] in championsInLobby:
                 continue
-            championsInLobby.append(benchChampion)
+            championsInLobby.append(benchChampion['championId'])
         #other player champions
         for player in result['myTeam']:
             playerChampion = player['championId']
